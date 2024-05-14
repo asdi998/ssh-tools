@@ -137,12 +137,16 @@ async def parse_ws_request(request, ws: WebSocket):
 
 async def run_client(request: RunRequest) -> dict:
     try:
-        key_file = request.passwd if os.path.exists(request.passwd) else None
+        passwd = {"client_keys": None}
         if "|||" in request.passwd:
             key_file = request.passwd.split("|||")
             if os.path.exists(key_file[0]):
-                request.passwd = key_file[1]
-                key_file = key_file[0]
+                passwd["passphrase"] = key_file[1]
+                passwd["client_keys"] = key_file[0]
+        elif os.path.exists(request.passwd):
+            passwd["client_keys"] = request.passwd
+        else:
+            passwd["password"] = request.passwd
         if request.mode == "exec":
             if not request.param:
                 return run_return(request, "异常", stderr="无命令")
@@ -150,9 +154,8 @@ async def run_client(request: RunRequest) -> dict:
                 request.host,
                 port=request.port,
                 username="root",
-                password=request.passwd,
-                client_keys=key_file,
                 known_hosts=None,
+                **passwd
             ) as conn:
                 result = await conn.run(request.param, stdin=asyncssh.DEVNULL)
             return run_return(
@@ -168,9 +171,8 @@ async def run_client(request: RunRequest) -> dict:
                 request.host,
                 port=request.port,
                 username="root",
-                password=request.passwd,
-                client_keys=key_file,
                 known_hosts=None,
+                **passwd
             ) as conn:
                 result = await conn.run(
                     mySettings.test_adsl_command,
@@ -242,9 +244,8 @@ async def run_client(request: RunRequest) -> dict:
                 request.host,
                 port=request.port,
                 username="root",
-                password=request.passwd,
-                client_keys=key_file,
                 known_hosts=None,
+                **passwd
             ) as conn:
                 async with conn.start_sftp_client() as sftp:
                     await sftp.put(mySettings.temp_file, request.param)
