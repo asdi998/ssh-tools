@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>批量SSH小工具</title>
+  <link rel="stylesheet" href="layui/css/layui.css?v=2.9.9">
+</head>
+
+<body>
+
+  <div class="layui-container">
+
+    <div class="layui-btn-container">
+      <button type="button" class="layui-btn" id="downBG">下载后端(v1)</button>
+      <button type="button" class="layui-btn" id="downFG">下载前端(v1.1)</button>
+      <button type="button" class="layui-btn" id="csv_file" lay-options="{
+        accept: 'file',
+        exts: 'csv'
+    }">选择CSV文件</button>
+      <button type="button" class="layui-btn" id="tempfile" lay-options="{accept: 'file'}">上传临时文件</button>
+      <span id="upfileTip"></span>
+    </div>
+
+  </div>
+
+  <div>
+    <table class="layui-hide" id="serversTable" lay-filter="currentTableFilter"></table>
+  </div>
+
+  <script type="text/html" id="toolbarDemo">
+  <div class="layui-btn-container">
+    <button class="layui-btn layui-btn-sm" id="filterGroupButton">
+      筛选组 
+      <i class="layui-icon layui-icon-down layui-font-12"></i>
+    </button>
+    <button class="layui-btn layui-btn-sm" id="filterStatusButton">
+      筛选状态 
+      <i class="layui-icon layui-icon-down layui-font-12"></i>
+    </button>
+    <button class="layui-btn layui-btn-sm" lay-event="runCommand">选中批量执行</button>
+    <button class="layui-btn layui-btn-sm" lay-event="putFile">选中批量上传</button>
+    <button class="layui-btn layui-btn-sm" lay-event="reADSL">选中批量拨号</button>
+    <button class="layui-btn layui-btn-sm" lay-event="refresh">刷新</button>
+  </div>
+</script>
+  <script type="text/html" id="barDemo">
+  <div class="layui-clear-space">
+    <a class="layui-btn layui-btn-xs" lay-event="exec">执行</a>
+    <a class="layui-btn layui-btn-xs" lay-event="upfile">上传</a>
+    <a class="layui-btn layui-btn-xs" lay-event="adsl">拨号</a>
+  </div>
+</script>
+  <!-- body 末尾处引入 layui -->
+  <script src="layui/layui.js?v=2.9.9"></script>
+  <script src="papaparse.min.js?v=1"></script>
+  <script src="index.js?v=1.1"></script>
+</body>
+
+</html>
