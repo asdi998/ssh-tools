@@ -11,7 +11,7 @@ var headerDefault = {
   "group": "产品组",
   "vpsname": "服务器名",
   "passwd": "密码/密钥",
-  "host": "ip端口",
+  "host": "IP端口",
   "adsl_username": "拨号账号",
   "adsl_password": "拨号密码"
 };
@@ -34,7 +34,7 @@ const cols = [[
       {field: 'group', title: '产品组', minWidth: 120, sort: true},
       {field: 'vpsname', title: '服务器名', minWidth: 160, sort: true},
       {field: 'passwd', title: '密码/密钥', minWidth: 120, hide: true},
-      {field: 'host', title: 'ip', width: 140},
+      {field: 'host', title: 'IP', width: 140},
       {field: 'port', title: '端口', width: 70, hide: true},
       {field: 'adsl_username', title: '拨号账号', minWidth: 130, sort: true, hide: true},
       {field: 'adsl_password', title: '拨号密码', minWidth: 105, sort: true, hide: true},
@@ -79,7 +79,7 @@ layui.use(function () {
   // 渲染上传
   upload.render({
     elem: '#csv_file', // 绑定多个元素
-    url: '//' + host + '/get_file_encoding/', // 此处配置你自己的上传接口即可
+    url: 'http://' + host + '/get_file_encoding/',
     acceptMime: 'text/csv',
     before: function (obj) {
       return checkConnected()
@@ -96,7 +96,7 @@ layui.use(function () {
   });
   upload.render({
     elem: '#tempfile', // 绑定多个元素
-    url: '//' + host + '/upfile/', // 此处配置你自己的上传接口即可
+    url: 'http://' + host + '/upfile/',
     // data: {"filename": "test"},
     choose: function (obj) {
       obj.preview(function (index, file, result) {
@@ -116,7 +116,7 @@ layui.use(function () {
   });
   upload.render({
     elem: '#keyfile', // 绑定多个元素
-    url: '//' + host + '/upfile/', // 此处配置你自己的上传接口即可
+    url: 'http://' + host + '/upfile/',
     data: {
       "filename": "key"
     },
