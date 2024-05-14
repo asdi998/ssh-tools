@@ -1,7 +1,10 @@
+// 全局变量
+var version = '1.2'
 var $ = layui.$;
 var tableFilterParam = {}
 var upfilename = null
 var isUpload = false
+var isKeyUp = false
 var autoRefreshId = null
 var isConnected = false
 var headerDefault = {
@@ -18,9 +21,15 @@ var timeConnect = 0;
 var updateCacheDatas = {}
 var csvFilename = "导出"
 var bgVer = null
+var servers = {
+  header: null,
+  data: null
+};
+const groups = new Set();
 
-const cols = [[ //标题栏
-      {type: 'checkbox', fixed: 'left'},
+//标题栏
+const cols = [[
+      {type: 'checkbox', fixed: 'left', LAY_CHECKED: true},
       {field: 'id', title: 'ID', width: 60, sort: true, hide: true},
       {field: 'group', title: '产品组', minWidth: 120, sort: true},
       {field: 'vpsname', title: '服务器名', minWidth: 160, sort: true},
@@ -49,12 +58,7 @@ const cols = [[ //标题栏
       {fixed: 'right', title:'操作', width: 160, toolbar: '#barDemo'}
     ]];
 
-var servers = {
-  header: null,
-  data: null
-};
-const groups = new Set();
-
+// 初始化
 layui.use(function () {
   var $ = layui.$;
   var layer = layui.layer;
@@ -72,16 +76,10 @@ layui.use(function () {
     ws_init()
   });
 
-  $("#downBG").click(function () {
-    window.open("/sshtool/sshpy/1/ssh.py");
-  })
-  $("#downFG").click(function () {
-    window.open("/sshtool/package/1/static.zip");
-  })
-  // 渲染
+  // 渲染上传
   upload.render({
     elem: '#csv_file', // 绑定多个元素
-    url: 'http://' + host + '/get_file_encoding/', // 此处配置你自己的上传接口即可
+    url: '//' + host + '/get_file_encoding/', // 此处配置你自己的上传接口即可
     acceptMime: 'text/csv',
     before: function (obj) {
       return checkConnected()
@@ -98,7 +96,8 @@ layui.use(function () {
   });
   upload.render({
     elem: '#tempfile', // 绑定多个元素
-    url: 'http://' + host + '/upfile/', // 此处配置你自己的上传接口即可
+    url: '//' + host + '/upfile/', // 此处配置你自己的上传接口即可
+    // data: {"filename": "test"},
     choose: function (obj) {
       obj.preview(function (index, file, result) {
         upfilename = file.name
@@ -112,6 +111,20 @@ layui.use(function () {
     done: function (res) {
       isUpload = true
       $('#upfileTip').show()
+      layer.msg(res['msg']);
+    }
+  });
+  upload.render({
+    elem: '#keyfile', // 绑定多个元素
+    url: '//' + host + '/upfile/', // 此处配置你自己的上传接口即可
+    data: {
+      "filename": "key"
+    },
+    before: function (obj) {
+      return checkConnected()
+    },
+    done: function (res) {
+      isKeyUp = true
       layer.msg(res['msg']);
     }
   });
@@ -156,6 +169,9 @@ layui.use(function () {
       ids.push(a.id)
     }
     switch (obj.event) {
+      case 'filterGroup':
+        filterGroup()
+        break;
       case 'runCommand':
         if (checkStatus.data.length != 0) {
           layer.prompt({
@@ -191,6 +207,19 @@ layui.use(function () {
           layer.confirm("是否执行？", {}, function (index) {
             layer.close(index);
             setTimeout(() => reADSLs(), 100)
+          });
+        } else {
+          layer.alert("请选中要执行的服务器")
+        }
+        break;
+      case 'setPasswds':
+        if (ids.length != 0) {
+          layer.prompt({
+            title: '请输入密码，上传的密钥请输入key',
+            value: "key"
+          }, function (passwd, index) {
+            layer.close(index);
+            setPasswds(passwd)
           });
         } else {
           layer.alert("请选中要执行的服务器")
@@ -475,6 +504,15 @@ function tranServers(fieldMaps) {
   })
 }
 
+function setPasswds(passwd) {
+  let datas = layui.table.checkStatus('serversTable').data
+  for (let data of datas) {
+    updateCache(data.id, {
+      passwd: passwd
+    })
+  }
+}
+
 function reADSLs() {
   let datas = layui.table.checkStatus('serversTable').data
   for (let data of datas) {
@@ -509,6 +547,7 @@ function putFile(data, path) {
   requestServerWs(data, "put", path)
 }
 
+// 请求操作
 function requestServerWs(data, mode, param) {
   if (!checkConnected()) {
     return
@@ -529,9 +568,13 @@ function requestServerWs(data, mode, param) {
     status: "执行中",
     startTime: performance.now()
   })
-  sendJson(data)
+  sendJson({
+    type: "run",
+    data: data
+  })
 }
 
+// 修改数据
 function updateCache(id, data) {
   let t = layui.table.cache['serversTable']
   for (let i = 0, len = t.length; i < len; i++) {
@@ -548,6 +591,7 @@ function updateCache(id, data) {
   layui.table.renderData('serversTable')
 }
 
+// 刷新数据
 function renderTable() {
   let checkedIds = []
   for (let s of layui.table.checkStatus('serversTable').data) {
@@ -560,8 +604,8 @@ function renderTable() {
     data: servers.data
   }, true);
   for (let k in tableFilterParam) {
-    layui.table.cache['serversTable'] = layui.table.cache['serversTable'].filter(item => {
-      if (k == "status") {
+    if (k == "status") {
+      layui.table.cache['serversTable'] = layui.table.cache['serversTable'].filter(item => {
         if (Array.isArray(tableFilterParam[k])) {
           for (let elem of tableFilterParam[k]) {
             if (item[k].indexOf(elem) !== -1) {
@@ -572,10 +616,21 @@ function renderTable() {
         } else {
           return (item[k].indexOf(tableFilterParam[k]) !== -1)
         }
-      } else {
+      });
+    } else if (k == "group" && Array.isArray(tableFilterParam[k])) {
+      layui.table.cache['serversTable'] = layui.table.cache['serversTable'].filter(item => {
+        for (let elem of tableFilterParam[k]) {
+          if (item[k] == elem) {
+            return true
+          }
+        }
+        return false
+      });
+    } else {
+      layui.table.cache['serversTable'] = layui.table.cache['serversTable'].filter(item => {
         return item[k] == tableFilterParam[k]
-      }
-    });
+      });
+    }
   }
   let t = layui.table.cache['serversTable']
   for (let i = 0, len = t.length; i < len; i++) {
@@ -585,10 +640,12 @@ function renderTable() {
   layui.table.renderData('serversTable')
 }
 
+// 刷新显示数据
 function renderData() {
   layui.table.renderData('serversTable')
 }
 
+// 解析主机端口
 function matchIPPort(host) {
   let p = /(.*):(\d*)/
   let result = host.match(p)
@@ -602,6 +659,7 @@ function matchIPPort(host) {
   }
 }
 
+// 解析拨号账号密码
 function matchADSL(adsl) {
   let p = /[(]([^ ]*)[ ]*([^ ]*)[)]/
   let result = adsl.match(p)
@@ -612,6 +670,67 @@ function matchADSL(adsl) {
   }
 }
 
+// 筛选多分组
+function filterGroup() {
+  let htmlContent = '';
+  for (group of groups) {
+    htmlContent += `
+                <div class="layui-form-item">
+                    <label class="layui-form-label">` + group + `</label>
+                    <div class="layui-input-block">
+                        <input type="checkbox" name="` + group + `" lay-skin="switch" title="显示|隐藏", checked='checked'>
+                    </div>
+                </div>
+                `;
+  };
+  layer.open({
+    type: 1,
+    resize: false,
+    shadeClose: true,
+    title: '产品组筛选设置',
+    content: `
+          <form id="filterForm" class="layui-form" action="" enctype="multipart/form-data" lay-filter="filterForm">
+              ` + htmlContent + `
+              <div class="layui-form-item">
+                  <div class="layui-input-block">
+                      <button class="layui-btn" lay-submit lay-filter="subHide">确定</button>
+                  </div>
+              </div>
+          </form>
+          `,
+    success: function (index) {
+      let form = layui.form;
+      form.render();
+      if (tableFilterParam['group']) {
+        let opt = {};
+        groups.forEach(function (item, index, arr) {
+          opt[item] = false;
+        });
+        if (Array.isArray(tableFilterParam['group'])) {
+          tableFilterParam['group'].forEach(function (item, index, arr) {
+            opt[item] = true;
+          });
+        } else {
+          opt[tableFilterParam['group']] = true
+        }
+        form.val('filterForm', opt);
+      }
+
+      form.on('submit(subHide)', function (data) {
+        let filterGroups = [];
+        Object.keys(data.field).forEach(function (item, index, arr) {
+          filterGroups.push(item);
+        });
+        tableFilterParam['group'] = filterGroups
+        layer.closeAll('page');
+        renderTable()
+        return false;
+      });
+    }
+  });
+}
+
+// 筛选单分组
 function showGroup(group) {
   if (group) {
     tableFilterParam['group'] = group
@@ -621,6 +740,7 @@ function showGroup(group) {
   renderTable()
 }
 
+// 筛选状态
 function showStatus(status) {
   if (status) {
     if (status == 'ok') tableFilterParam['status'] = "成功"
@@ -635,6 +755,7 @@ function showStatus(status) {
   renderTable()
 }
 
-String.prototype.replaceAll = function(s1,s2){
-  return this.replace(new RegExp(s1,"gm"),s2);
+// 字符串替换功能
+String.prototype.replaceAll = function (s1, s2) {
+  return this.replace(new RegExp(s1, "gm"), s2);
 }

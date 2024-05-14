@@ -3,7 +3,7 @@ import os
 import atexit
 import shutil
 import asyncssh
-from fastapi import File, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import File, Form, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -14,16 +14,16 @@ import asyncio
 from fastapi.staticfiles import StaticFiles
 
 
-class settings:
-    version = 1
-    temp_file = "uploadfile.tmp"  # 临时文件
-    adsl_wait_time = 5  # 拨号后等待n秒
-    test_adsl_command = "command -v pppoe-stop"
-    adsl_start_command = "pppoe-stop"  # 修改拨号前执行命令
-    adsl_secrets_command = 'echo "\\"{username}\\"\t*\t\\"{password}\\"" > {file}'
-    adsl_conf_command = "sed -i 's/USER=.*/USER={user}/' {file}"
-    adsl_end_command = "pppoe-start"  # 修改拨号后执行命令
-    adsl_return_command = "ifconfig | grep ppp | grep inet"  # 拨号返回结果命令
+class Settings(BaseModel):
+    version: int = 2
+    temp_file: str = "uploadfile.tmp"  # 临时文件
+    adsl_wait_time: int = 5  # 拨号后等待n秒
+    test_adsl_command: int = "command -v pppoe-stop"
+    adsl_start_command: int = "pppoe-stop"  # 修改拨号前执行命令
+    adsl_secrets_command: int = 'echo "\\"{username}\\"\t*\t\\"{password}\\"" > {file}'
+    adsl_conf_command: int = "sed -i 's/USER=.*/USER={user}/' {file}"
+    adsl_end_command: int = "pppoe-start"  # 修改拨号后执行命令
+    adsl_return_command: int = "ifconfig | grep ppp | grep inet"  # 拨号返回结果命令
 
 
 class ServerData(BaseModel):
@@ -42,6 +42,11 @@ class RunRequest(ServerData):
     param: str = None
 
 
+class CommonRequest(BaseModel):
+    type: str
+    data: dict
+
+
 app = FastAPI()
 
 app.add_middleware(
@@ -54,19 +59,21 @@ app.add_middleware(
 
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
+
     @app.get("/")
     async def index():
         return RedirectResponse("static/index.html")
 
 
 bgtasks = set()
+mySettings = Settings()
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     global bgtasks
     await websocket.accept()
-    await websocket.send_json({"config": {"version": settings.version}})
+    await websocket.send_json({"config": {"version": mySettings.version}})
     try:
         while True:
             try:
@@ -92,27 +99,50 @@ async def get_file_encoding(file: UploadFile = File(...)):
 
 
 @app.post("/upfile/")
-async def create_file(file: UploadFile = File(...)):
+async def create_file(filename: str = Form(None), file: UploadFile = File(...)):
+    if filename is None:
+        filename = mySettings.temp_file
     try:
-        with open(settings.temp_file, "wb") as f:
+        with open(filename, "wb") as f:
             shutil.copyfileobj(file.file, f)
         return {"status": "ok", "msg": "上传成功"}
     except Exception as e:
         return {"status": "error", "msg": "上传失败：" + str(e)}
 
 
+@app.get("/get_settings")
+async def get_settings():
+    return mySettings
+
+
 async def parse_ws_request(request, ws: WebSocket):
+    global mySettings
     try:
-        request = RunRequest(**request)
-        result = await run_client(request)
+        request = CommonRequest(**request)
+        request_type = request.type
+        data = request.data
+        if request_type == "run":
+            try:
+                run_request = RunRequest(**data)
+                result = await run_client(run_request)
+            except Exception as e:
+                await ws.send_json(run_return(request, "后端解析异常", stderr=str(e)))
+        elif request_type == "set":
+            mySettings = Settings(**data)
+            result = {"status": "ok"}
         await ws.send_json(result)
     except Exception as e:
-        await ws.send_json(run_return(request, "服务端异常", stderr=str(e)))
+        await ws.send_json({"status": "error", "err": str(e)})
 
 
 async def run_client(request: RunRequest) -> dict:
     try:
         key_file = request.passwd if os.path.exists(request.passwd) else None
+        if "|||" in request.passwd:
+            key_file = request.passwd.split("|||")
+            if os.path.exists(key_file[0]):
+                request.passwd = key_file[1]
+                key_file = key_file[0]
         if request.mode == "exec":
             if not request.param:
                 return run_return(request, "异常", stderr="无命令")
@@ -122,6 +152,7 @@ async def run_client(request: RunRequest) -> dict:
                 username="root",
                 password=request.passwd,
                 client_keys=key_file,
+                known_hosts=None,
             ) as conn:
                 result = await conn.run(request.param, stdin=asyncssh.DEVNULL)
             return run_return(
@@ -139,9 +170,10 @@ async def run_client(request: RunRequest) -> dict:
                 username="root",
                 password=request.passwd,
                 client_keys=key_file,
+                known_hosts=None,
             ) as conn:
                 result = await conn.run(
-                    settings.test_adsl_command,
+                    mySettings.test_adsl_command,
                     stdin=asyncssh.DEVNULL,
                 )
                 if result.exit_status != 0:
@@ -159,10 +191,10 @@ async def run_client(request: RunRequest) -> dict:
                 if isUbuntu:
                     user_config_file = "/etc/ppp/pppoe.conf"
                 result = await conn.run(
-                    settings.adsl_start_command, stdin=asyncssh.DEVNULL
+                    mySettings.adsl_start_command, stdin=asyncssh.DEVNULL
                 )
                 result = await conn.run(
-                    settings.adsl_secrets_command.format(
+                    mySettings.adsl_secrets_command.format(
                         username=request.adsl_username,
                         password=request.adsl_password,
                         file="/etc/ppp/chap-secrets",
@@ -170,7 +202,7 @@ async def run_client(request: RunRequest) -> dict:
                     stdin=asyncssh.DEVNULL,
                 )
                 result = await conn.run(
-                    settings.adsl_secrets_command.format(
+                    mySettings.adsl_secrets_command.format(
                         username=request.adsl_username,
                         password=request.adsl_password,
                         file="/etc/ppp/pap-secrets",
@@ -178,13 +210,13 @@ async def run_client(request: RunRequest) -> dict:
                     stdin=asyncssh.DEVNULL,
                 )
                 result = await conn.run(
-                    settings.adsl_conf_command.format(
+                    mySettings.adsl_conf_command.format(
                         user=request.adsl_username, file=user_config_file
                     ),
                     stdin=asyncssh.DEVNULL,
                 )
                 result = await conn.run(
-                    settings.adsl_secrets_command.format(
+                    mySettings.adsl_secrets_command.format(
                         username=request.adsl_username,
                         password=request.adsl_password,
                         file="/etc/ppp/pap-secrets",
@@ -192,11 +224,11 @@ async def run_client(request: RunRequest) -> dict:
                     stdin=asyncssh.DEVNULL,
                 )
                 result = await conn.run(
-                    settings.adsl_end_command, stdin=asyncssh.DEVNULL
+                    mySettings.adsl_end_command, stdin=asyncssh.DEVNULL
                 )
-                await asyncio.sleep(settings.adsl_wait_time)
+                await asyncio.sleep(mySettings.adsl_wait_time)
                 result = await conn.run(
-                    settings.adsl_return_command, stdin=asyncssh.DEVNULL
+                    mySettings.adsl_return_command, stdin=asyncssh.DEVNULL
                 )
             return run_return(
                 request,
@@ -212,14 +244,15 @@ async def run_client(request: RunRequest) -> dict:
                 username="root",
                 password=request.passwd,
                 client_keys=key_file,
+                known_hosts=None,
             ) as conn:
                 async with conn.start_sftp_client() as sftp:
-                    await sftp.put(settings.temp_file, request.param)
+                    await sftp.put(mySettings.temp_file, request.param)
                 up_path = os.path.split(request.param)
                 result = await conn.run(
                     '{}ls "$PWD/{}"'.format(
                         f"cd {up_path[0]};" if up_path[0] else "",
-                        settings.temp_file if not up_path[1] else up_path[1],
+                        mySettings.temp_file if not up_path[1] else up_path[1],
                     ),
                     stdin=asyncssh.DEVNULL,
                 )
@@ -251,8 +284,10 @@ def run_return(request: RunRequest, status, status_code=-1, stdout="", stderr=""
 
 
 def clean():
-    if os.path.exists(settings.temp_file):
-        os.remove(settings.temp_file)
+    if os.path.exists(mySettings.temp_file):
+        os.remove(mySettings.temp_file)
+    if os.path.exists("key"):
+        os.remove("key")
 
 
 if __name__ == "__main__":
