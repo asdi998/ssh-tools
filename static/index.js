@@ -29,7 +29,7 @@ const groups = new Set();
 
 //标题栏
 const cols = [[
-      {type: 'checkbox', fixed: 'left', LAY_CHECKED: true},
+      {type: 'checkbox', fixed: 'left'},
       {field: 'id', title: 'ID', width: 60, sort: true, hide: true},
       {field: 'group', title: '产品组', minWidth: 120, sort: true},
       {field: 'vpsname', title: '服务器名', minWidth: 160, sort: true},
@@ -414,7 +414,8 @@ function tranServers(fieldMaps) {
       status_code: 0,
       stdout: "",
       stderr: "",
-      runTime: ""
+      runTime: "",
+      LAY_CHECKED: true
     }
     for (let key in headerDefault) {
       if (key == "host") {
