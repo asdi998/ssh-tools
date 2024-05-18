@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 
 class Settings(BaseModel):
-    version: int = 2
+    version: int = 3
     temp_file: str = "uploadfile.tmp"  # 临时文件
     adsl_wait_time: int = 5  # 拨号后等待n秒
     test_adsl_command: int = "command -v pppoe-stop"
@@ -122,17 +122,14 @@ async def parse_ws_request(request, ws: WebSocket):
         request_type = request.type
         data = request.data
         if request_type == "run":
-            try:
-                run_request = RunRequest(**data)
-                result = await run_client(run_request)
-            except Exception as e:
-                await ws.send_json(run_return(request, "后端解析异常", stderr=str(e)))
+            run_request = RunRequest(**data)
+            result = await run_client(run_request)
         elif request_type == "set":
             mySettings = Settings(**data)
             result = {"status": "ok"}
         await ws.send_json(result)
     except Exception as e:
-        await ws.send_json({"status": "error", "err": str(e)})
+        await ws.send_json({"status": "error", "msg": "后端解析异常", "err": str(e)})
 
 
 async def run_client(request: RunRequest) -> dict:
@@ -293,4 +290,4 @@ def clean():
 
 if __name__ == "__main__":
     atexit.register(clean)
-    uvicorn.run("ssh:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("ssh:app", host="0.0.0.0", port=8000, ws_ping_timeout=None, reload=False)

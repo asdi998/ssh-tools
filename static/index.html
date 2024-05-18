@@ -6,6 +6,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>批量SSH小工具</title>
   <link rel="stylesheet" href="layui/css/layui.css?v=2.9.9">
+  <style>
+    th:not(:last-child) {
+      resize: horizontal;
+      overflow: auto;
+    }
+  </style>
 </head>
 
 <body>
@@ -24,28 +30,46 @@
 
   </div>
 
-  <div>
-    <table class="layui-hide" id="serversTable" lay-filter="currentTableFilter"></table>
-  </div>
-
-  <script type="text/html" id="toolbarDemo">
   <div class="layui-btn-container">
+    <button class="layui-btn layui-btn-sm" onclick="filterCol()">设置表头</button>
     <button class="layui-btn layui-btn-sm" id="filterStatusButton">
-      筛选状态 
+      筛选状态
       <i class="layui-icon layui-icon-down layui-font-12"></i>
     </button>
     <button class="layui-btn layui-btn-sm" id="filterGroupButton">
-      筛选组 
+      筛选组
       <i class="layui-icon layui-icon-down layui-font-12"></i>
     </button>
-    <button class="layui-btn layui-btn-sm" lay-event="filterGroup">筛选组</button>
-    <button class="layui-btn layui-btn-sm" lay-event="setPasswds">批量改密</button>
-    <button class="layui-btn layui-btn-sm" lay-event="runCommand">批量执行</button>
-    <button class="layui-btn layui-btn-sm" lay-event="putFile">批量上传</button>
-    <button class="layui-btn layui-btn-sm" lay-event="reADSL">批量拨号</button>
-    <button class="layui-btn layui-btn-sm" lay-event="refresh">刷新</button>
+    <button class="layui-btn layui-btn-sm" onclick="filterGroup()">筛选组</button>
+    <button class="layui-btn layui-btn-sm" onclick="setPasswds()">批量改密</button>
+    <button class="layui-btn layui-btn-sm" onclick="runCommands()">批量执行</button>
+    <button class="layui-btn layui-btn-sm" onclick="putFiles()">批量上传</button>
+    <button class="layui-btn layui-btn-sm" onclick="reADSLs()">批量拨号</button>
+    <button class="layui-btn layui-btn-sm" onclick="refresh()">刷新</button>
+    <button class="layui-btn layui-btn-sm" onclick="exportData()">导出</button>
   </div>
-</script>
+
+  <div>
+    <div id="myForm" class="table-container">
+      <table class="layui-table" style="width: 100%;" lay-size="sm" id="serversTable" lay-filter="currentTableFilter">
+      </table>
+    </div>
+  </div>
+
+  <script id="tableTPL" type="text/html">
+    <colgroup>
+      {{- d.cols}}
+    </colgroup>
+    <thead>
+      <tr>
+        {{- d.ths}}
+      </tr>
+    </thead>
+    <tbody>
+      {{- d.trs}}
+    </tbody>
+  </script>
+
   <script type="text/html" id="barDemo">
   <div class="layui-clear-space">
     <a class="layui-btn layui-btn-xs" lay-event="exec">执行</a>
@@ -53,10 +77,9 @@
     <a class="layui-btn layui-btn-xs" lay-event="adsl">拨号</a>
   </div>
 </script>
-  <!-- body 末尾处引入 layui -->
   <script src="layui/layui.js?v=2.9.9"></script>
   <script src="papaparse.min.js?v=1"></script>
-  <script src="index.js?v=1.2"></script>
+  <script src="index.js?v=2"></script>
 </body>
 
 </html>
