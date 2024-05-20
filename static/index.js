@@ -427,12 +427,11 @@ function setChecks(isCheck) {
 }
 
 function updateData(id, data) {
-  data.id = id
   if (servers.data[id].startTime != undefined && data.startTime == undefined) {
     servers.data[id].runTime = parseInt(performance.now() - servers.data[id].startTime) + "ms";
   }
   Object.assign(servers.data[id], data)
-  document.querySelector('tr[name="data[' + id + ']"]').innerHTML = buildTr(servers.data[id])
+  // document.querySelector('tr[name="data[' + id + ']"]').innerHTML = buildTr(servers.data[id])
 }
 
 
@@ -497,6 +496,7 @@ function sendJson(data) {
 
 function parseResponse(ret) {
   if (ret.id !== undefined && ret.status != undefined) {
+    console.log(ret.id, ret.status, ret.stdout, ret.stderr)
     updateData(ret.id, ret)
   } else if (ret.config !== undefined) {
     if (ret.config.version !== undefined) {
@@ -606,6 +606,7 @@ function putFile(ids, path) {
 // 请求操作
 function requestServerWs(ids, mode, param) {
   if (Array.isArray(ids)) {
+    $('#serversTable').hide()
     for (let i = 0, l = ids.length; i < l; i++) {
       let data = servers.data[ids[i]]
       Object.assign(data, {
